@@ -7,8 +7,7 @@ import datetime, pytz
 from datetime import timedelta
 from matplotlib.animation import FuncAnimation
 import ffmpeg
-
-plt.rcParams['animation.ffmpeg_path'] = '/usr/bin/ffmpeg'
+import scipy as sp
 
 
 def get_data_from_api(t1, t2):
@@ -58,12 +57,12 @@ def format_reference_data():
 
 
 def adjust_for_jumps(times, concs):
-    
+    step0 = times[0]
     step1 = datetime.datetime(2024, 10, 23, 1, 10, tzinfo=pytz.UTC)
     step2 = datetime.datetime(2024, 10, 23, 11, 50, tzinfo=pytz.UTC)
     step3 = datetime.datetime(2024, 10, 25, 10, 25, tzinfo=pytz.UTC)
     step4 = datetime.datetime(2024, 10, 27, 8, 50, tzinfo=pytz.UTC)
-    steps = [step1, step2, step3, step4]
+    steps = [step0, step1, step2, step3, step4]
     step_indices = []
     for step in steps:
         step_indices.append(times.index(step))
@@ -85,7 +84,7 @@ def adjust_for_jumps(times, concs):
                 adjustment_offset[i] = - 10
     
     new_concs = concs + adjustment_offset
-    return new_concs, adjustment_offset
+    return list(new_concs), adjustment_offset
 
 
 def adjust_for_jumps2(times, concs):
@@ -148,37 +147,32 @@ def calibrate(times, concs, ref_concs):
     fig = plt.figure()
     t0 = times[0]
     interval = [(t - t0).total_seconds()/3600 for t in times] 
-    print(len(times))
     s1 = 0
     s2 = -1
 
     coef = np.polyfit(list(concs[s1:s2]), list(ref_concs[s1:s2]), 1)
-    print(coef)
+
+    print(sp.stats.linregress(concs[s1:s2], ref_concs[s1:s2]))
     
-    x = np.asarray([0, 500])
-    y = coef[0] * x + coef[1]
     sc = plt.scatter(concs[s1:s2], ref_concs[s1:s2], c=interval[s1:s2])
 
     def update(frame):
         sc.set_offsets(np.c_[concs[s1:s1+frame], ref_concs[s1:s1+frame]])
         return sc,
     ani = FuncAnimation(fig, update, frames=len(concs[s1:s2]) + 1, blit=True, repeat=False, interval=0.002)
-    
 
-
-   # plt.plot(x, y, color="black", label=f"y = {round(coef[0], 3)} x + {round(coef[1], 3)}")
     plt.legend()
     cbar = plt.colorbar()
     cbar.set_label("Time / hours")
-    #plt.xlim(365, 490)
-    #plt.ylim(435, 560)
     plt.xlabel('Sensor Data / ppm')
     plt.ylabel('Reference Data / ppm')
-    ani.save("LDN_Air_sensor.gif", writer="FFMpegWriter")
+    ani.save("LDN_Air_sensor.gif")
     plt.show()
 
-    print(concs, type(concs))
     concs2 = np.asarray(concs) * coef[0] + coef[1]
+    
+
+    
 
     plot_initial_data(times, concs2, ref_concs)
 
@@ -189,12 +183,20 @@ def main():
 
     ref_times, ref_concs = fix_gap(ref_times, ref_concs)
     
-    #concs, jump_offsets = adjust_for_jumps(times, concs)
-    #concs = adjust_for_jumps2(times, concs)
+    #prompt user which of the adjustment functions to use
+    #choice = input("which do you want to use (1, 2, 3)")
+    #if choice == "1":
+    #    concs, jump_offsets = adjust_for_jumps(times, concs)
+    #elif choice == "2":
+    #    concs = adjust_for_jumps2(times, concs)
+    #elif choice == "3":
+    #    concs = adjust_for_jumps3(times, concs)
+    #else:
+    #    pass
 
-    #plt.plot(times, jump_offsets, label="Jump Offset")
-    #plt.show()
-    #plot_initial_data(times, concs, ref_concs)
+    print(type(concs), np.shape(concs))
+
+    plot_initial_data(times, concs, ref_concs)
 
     calibrate(times, concs, ref_concs)
 
