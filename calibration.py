@@ -6,6 +6,9 @@ import pandas as pd
 import datetime, pytz
 from datetime import timedelta
 from matplotlib.animation import FuncAnimation
+import ffmpeg
+
+plt.rcParams['animation.ffmpeg_path'] = '/usr/bin/ffmpeg'
 
 
 def get_data_from_api(t1, t2):
@@ -159,8 +162,8 @@ def calibrate(times, concs, ref_concs):
     def update(frame):
         sc.set_offsets(np.c_[concs[s1:s1+frame], ref_concs[s1:s1+frame]])
         return sc,
-    ani = FuncAnimation(fig, update, frames=len(concs[s1:s2]) + 1, blit=True, repeat=False, interval=0.01)
-    ani.save("LDN_Air_sensor.mp4", writer="FFMpegWriter")
+    ani = FuncAnimation(fig, update, frames=len(concs[s1:s2]) + 1, blit=True, repeat=False, interval=0.002)
+    
 
 
    # plt.plot(x, y, color="black", label=f"y = {round(coef[0], 3)} x + {round(coef[1], 3)}")
@@ -171,6 +174,7 @@ def calibrate(times, concs, ref_concs):
     #plt.ylim(435, 560)
     plt.xlabel('Sensor Data / ppm')
     plt.ylabel('Reference Data / ppm')
+    ani.save("LDN_Air_sensor.gif", writer="FFMpegWriter")
     plt.show()
 
     print(concs, type(concs))
