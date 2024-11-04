@@ -10,11 +10,11 @@ import ffmpeg
 import scipy as sp
 
 
-def get_data_from_api(t1, t2):
+def get_calibration_data_from_api(id, t1, t2):
     auth_token = "f2aec323-a779-4ee1-b63f-d147612982fb"
     auth_string = f"?token={auth_token}"
     source_url = "https://api.airgradient.com/public/api/v1/"
-    locationId = "80172"
+    locationId = id
 
 
     def constructed_url(endpoint, from_string="", to_string=""):
@@ -30,11 +30,11 @@ def get_data_from_api(t1, t2):
     return response
 
 
-def download_calibration_data():
+def download_calibration_data(id):
     t1 = "20241022T153000Z"
     t2 = "20241027T235500Z"
 
-    response = get_data_from_api(t1, t2)
+    response = get_calibration_data_from_api(id, t1, t2)
 
     co2 = [d["rco2"] for d in response]
     times = [parser.parse(d["timestamp"]) - timedelta(hours=1) for d in response]
@@ -58,11 +58,8 @@ def format_reference_data():
 
 def adjust_for_jumps(times, concs):
     step0 = times[0]
-    step1 = datetime.datetime(2024, 10, 23, 1, 10, tzinfo=pytz.UTC)
-    step2 = datetime.datetime(2024, 10, 23, 11, 50, tzinfo=pytz.UTC)
-    step3 = datetime.datetime(2024, 10, 25, 10, 25, tzinfo=pytz.UTC)
-    step4 = datetime.datetime(2024, 10, 27, 8, 50, tzinfo=pytz.UTC)
-    steps = [step0, step1, step2, step3, step4]
+    step1 = datetime.datetime(2024, 10, 27, 10, 10, tzinfo=pytz.UTC)
+    steps = [step0, step1]
     step_indices = []
     for step in steps:
         step_indices.append(times.index(step))
@@ -102,6 +99,7 @@ def adjust_for_jumps2(times, concs):
 
     return concs
 
+
 def adjust_for_jumps3(times, concs):
     
     step1 = datetime.datetime(2024, 10, 27, 11, 20, tzinfo=pytz.UTC)
@@ -113,7 +111,6 @@ def adjust_for_jumps3(times, concs):
                 concs[i] -= 20
 
     return concs
-
 
 
 def fix_gap(ref_times, ref_concs):
@@ -132,7 +129,7 @@ def fix_gap(ref_times, ref_concs):
     return zip(*new_zipped)
 
 
-def plot_initial_data(times, jumped_concs, ref_concs):
+def plot_data(times, jumped_concs, ref_concs):
 
     plt.plot(times, jumped_concs, color="red", label="Sensor Data")
     plt.plot(times, ref_concs, color="black", label="Reference")
@@ -143,7 +140,7 @@ def plot_initial_data(times, jumped_concs, ref_concs):
     plt.show()
 
 
-def calibrate(times, concs, ref_concs):
+def lin_regress_against_reference(times, concs, ref_concs, no_plot=False):
     fig = plt.figure()
     t0 = times[0]
     interval = [(t - t0).total_seconds()/3600 for t in times] 
@@ -151,6 +148,11 @@ def calibrate(times, concs, ref_concs):
     s2 = -1
 
     coef = np.polyfit(list(concs[s1:s2]), list(ref_concs[s1:s2]), 1)
+
+    concs2 = np.asarray(concs) * coef[0] + coef[1]
+
+    if no_plot:
+        return (times, concs2, coef)
 
     print(sp.stats.linregress(concs[s1:s2], ref_concs[s1:s2]))
     
@@ -168,13 +170,23 @@ def calibrate(times, concs, ref_concs):
     plt.ylabel('Reference Data / ppm')
     ani.save("LDN_Air_sensor.gif")
     plt.show()
-
-    concs2 = np.asarray(concs) * coef[0] + coef[1]
     
+    plot_data(times, concs2, ref_concs)
 
+    return times, concs2, ref_concs
+
+
+def calibrate(id="80176"):
+    times, concs = download_calibration_data(id)
+    ref_times, ref_concs = format_reference_data()
+
+    ref_times, ref_concs = fix_gap(ref_times, ref_concs)
     
+    concs, jump_offsets = adjust_for_jumps(times, concs)
 
-    plot_initial_data(times, concs2, ref_concs)
+    times, concs, coef = lin_regress_against_reference(times, concs, ref_concs, no_plot=True)
+
+    return(coef)
 
 
 def main():
@@ -182,23 +194,12 @@ def main():
     ref_times, ref_concs = format_reference_data()
 
     ref_times, ref_concs = fix_gap(ref_times, ref_concs)
+
+    concs, jump_offsets = adjust_for_jumps(times, concs)
     
-    #prompt user which of the adjustment functions to use
-    #choice = input("which do you want to use (1, 2, 3)")
-    #if choice == "1":
-    #    concs, jump_offsets = adjust_for_jumps(times, concs)
-    #elif choice == "2":
-    #    concs = adjust_for_jumps2(times, concs)
-    #elif choice == "3":
-    #    concs = adjust_for_jumps3(times, concs)
-    #else:
-    #    pass
+    plot_data(times, concs, ref_concs)
 
-    print(type(concs), np.shape(concs))
-
-    plot_initial_data(times, concs, ref_concs)
-
-    calibrate(times, concs, ref_concs)
+    lin_regress_against_reference(times, concs, ref_concs)
 
 if __name__ == "__main__":
     main()
