@@ -114,8 +114,10 @@ def lin_regress_against_reference(times, concs, ref_concs, no_plot=False):
     fig = plt.figure()
     t0 = times[0]
     interval = [(t - t0).total_seconds()/3600 for t in times] 
-    s1 = 0
-    s2 = -1
+    
+    print(len(concs))
+    s1 = 800
+    s2 = 1200
 
     coef = np.polyfit(list(concs[s1:s2]), list(ref_concs[s1:s2]), 1)
 
@@ -166,8 +168,7 @@ def main(id="80176"):
     
     concs, jump_offsets = adjust_for_jumps(times, concs)
     
-    
-    times, concs, coef = lin_regress_against_reference(times, concs, ref_concs, no_plot=True)
+    times, concs, coef = lin_regress_against_reference(times, concs, ref_concs)
 
     plot_data(times, concs, ref_concs)
 
