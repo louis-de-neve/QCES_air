@@ -166,11 +166,13 @@ def main(id="80176"):
     
     concs, jump_offsets = adjust_for_jumps(times, concs)
     
-
+    
     times, concs, coef = lin_regress_against_reference(times, concs, ref_concs, no_plot=True)
 
     plot_data(times, concs, ref_concs)
 
+    plt.plot(times, concs-ref_concs)
+    plt.show()
 
 if __name__ == "__main__":
     main()

@@ -27,33 +27,45 @@ def apply_calibration(coefs, data):
         return [int((d * coefs[0] + coefs[1])) for d in data]
 
 
-def initialise():
-    locationId = "80176"    
-
-    coefs = calibrate(locationId)
-    print(coefs)
-
-    t1 = "20241105T080000Z"
-    t2 = "20241106T235500Z"
-    
-    response = get_data_from_api(locationId, t1, t2)
-
+def get_past_data(id:str, coefs, t1:str, t2:str):
+    response = get_data_from_api(id, t1, t2)
+    pm2 = np.asarray([d["pm02"] for d in response])
     co2 = np.asarray([d["rco2"] for d in response])
-    concs = co2*coefs[0] + coefs[1] 
     times = [parser.parse(d["timestamp"]) - timedelta(hours=1) for d in response]
 
-    plt.plot(times, concs)
-    plt.show()
 
-    
 
-    while True:
-        raw_data = get_current_data_from_api(locationId)
+    return times, co2*coefs[0]+coefs[1], pm2
+
+
+def get_live_data(id, coefs):
+     while True:
+        raw_data = get_current_data_from_api(id)
         co2_val = raw_data["rco2"] 
         adjusted_current_co2 = apply_calibration(coefs, co2_val)
         print(f"Raw reading: {co2_val}ppm, Calibrated: {adjusted_current_co2}ppm")
         time.sleep(60)
 
+
+def initialise():
+    locationId = "80176"    
+    coefs = calibrate(locationId)
+    t1 = "20241105T080000Z"
+    t2 = "20241106T235500Z"
+    
+    times, concs, pm2 = get_past_data(locationId, coefs, t1, t2)
+    
+    plt.plot(times, concs)
+    plt.show()
+
+    plt.plot(times, pm2)
+    plt.show()
+
+    get_live_data(locationId, coefs)
+
+    
+
+   
 
 
 
