@@ -1,4 +1,4 @@
-import requests, json
+import requests
 import numpy as np
 import matplotlib.pyplot as plt
 from dateutil import parser
@@ -6,7 +6,6 @@ import pandas as pd
 import datetime, pytz
 from datetime import timedelta
 from matplotlib.animation import FuncAnimation
-import ffmpeg
 import scipy as sp
 
 
@@ -183,20 +182,20 @@ def calibrate(id="80176"):
     ref_times, ref_concs = fix_gap(ref_times, ref_concs)
     
     concs, jump_offsets = adjust_for_jumps(times, concs)
-
     times, concs, coef = lin_regress_against_reference(times, concs, ref_concs, no_plot=True)
 
     return(coef)
 
 
-def main():
-    times, concs = download_calibration_data()
+def main(id="80176"):
+    times, concs = download_calibration_data(id)
     ref_times, ref_concs = format_reference_data()
 
     ref_times, ref_concs = fix_gap(ref_times, ref_concs)
-
+    plot_data(times, concs, ref_concs)
     concs, jump_offsets = adjust_for_jumps(times, concs)
-    
+    plt.plot(times, jump_offsets)
+    plt.show()
     plot_data(times, concs, ref_concs)
 
     lin_regress_against_reference(times, concs, ref_concs)
