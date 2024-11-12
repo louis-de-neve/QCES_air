@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation
 import scipy as sp
 
 
-def get_calibration_data_from_api(id, t1, t2):
+def get_data_from_api(id, t1, t2):
     auth_token = "f2aec323-a779-4ee1-b63f-d147612982fb"
     auth_string = f"?token={auth_token}"
     source_url = "https://api.airgradient.com/public/api/v1/"
@@ -33,7 +33,7 @@ def download_calibration_data(id):
     t1 = "20241022T153000Z"
     t2 = "20241027T235500Z"
 
-    response = get_calibration_data_from_api(id, t1, t2)
+    response = get_data_from_api(id, t1, t2)
 
     co2 = [d["rco2"] for d in response]
     times = [parser.parse(d["timestamp"]) - timedelta(hours=1) for d in response]
@@ -81,35 +81,6 @@ def adjust_for_jumps(times, concs):
     
     new_concs = concs + adjustment_offset
     return list(new_concs), adjustment_offset
-
-
-def adjust_for_jumps2(times, concs):
-    
-    step1 = datetime.datetime(2024, 10, 23, 1, 10, tzinfo=pytz.UTC)
-    step2 = datetime.datetime(2024, 10, 23, 11, 50, tzinfo=pytz.UTC)
-    step3 = datetime.datetime(2024, 10, 25, 10, 25, tzinfo=pytz.UTC)
-    step4 = datetime.datetime(2024, 10, 27, 8, 50, tzinfo=pytz.UTC)
-    steps = [step1, step2, step3, step4]
-    
-    for step in steps:
-        for i, t in enumerate(times):
-            if t > step:
-                concs[i] -= 20
-
-    return concs
-
-
-def adjust_for_jumps3(times, concs):
-    
-    step1 = datetime.datetime(2024, 10, 27, 11, 20, tzinfo=pytz.UTC)
-    steps = [step1]
-    
-    for step in steps:
-        for i, t in enumerate(times):
-            if t > step:
-                concs[i] -= 20
-
-    return concs
 
 
 def fix_gap(ref_times, ref_concs):
@@ -192,13 +163,14 @@ def main(id="80176"):
     ref_times, ref_concs = format_reference_data()
 
     ref_times, ref_concs = fix_gap(ref_times, ref_concs)
-    plot_data(times, concs, ref_concs)
+    
     concs, jump_offsets = adjust_for_jumps(times, concs)
-    plt.plot(times, jump_offsets)
-    plt.show()
+    
+
+    times, concs, coef = lin_regress_against_reference(times, concs, ref_concs, no_plot=True)
+
     plot_data(times, concs, ref_concs)
 
-    lin_regress_against_reference(times, concs, ref_concs)
 
 if __name__ == "__main__":
     main()
