@@ -29,13 +29,21 @@ def apply_calibration(coefs, data):
 
 def get_past_data(id:str, coefs, t1:str, t2:str):
     response = get_data_from_api(id, t1, t2)
-    pm2 = np.asarray([d["pm02"] for d in response])
-    co2 = np.asarray([d["rco2"] for d in response])
+
+    data_dict = {}
+    for label in response[0].keys():
+        data_dict[label] = np.asarray([d[label] for d in response])
+
+
+    data_dict["rco2"] = data_dict["rco2"] * coefs[0] + coefs[1]
     times = [parser.parse(d["timestamp"]) - timedelta(hours=1) for d in response]
 
 
+    print(data_dict.keys())
 
-    return times, co2*coefs[0]+coefs[1], pm2
+
+
+    return times, data_dict
 
 
 def get_live_data(id, coefs):
@@ -51,15 +59,21 @@ def initialise():
     locationId = "80176"    
     coefs = calibrate(locationId)
     t1 = "20241105T080000Z"
-    t2 = "20241106T235500Z"
+    t2 = "20241108T235500Z"
     
-    times, concs, pm2 = get_past_data(locationId, coefs, t1, t2)
+    times, data_dict = get_past_data(locationId, coefs, t1, t2)
     
-    plt.plot(times, concs)
+    fig, axs = plt.subplots(nrows=3, sharex=True)
+    axs[0].plot(times, data_dict["rco2"])
+    axs[0].set_ylabel("Calibrated CO2 (ppm)")
+    axs[1].plot(times, data_dict["tvoc"])
+    axs[1].set_ylabel("tvoc (ppm)")
+    axs[2].plot(times, data_dict["pm10"])
+    axs[2].set_ylabel("pm10 (ppm)")
+    fig.tight_layout()
     plt.show()
 
-    plt.plot(times, pm2)
-    plt.show()
+
 
     get_live_data(locationId, coefs)
 
