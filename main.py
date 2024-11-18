@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from dateutil import parser
 from datetime import timedelta
 import numpy as np
+from scipy.optimize import curve_fit
 
 def get_current_data_from_api(id:str):
     auth_token = "f2aec323-a779-4ee1-b63f-d147612982fb"
@@ -58,8 +59,8 @@ def get_live_data(id, coefs):
 def initialise():
     locationId = "80176"    
     coefs = calibrate(locationId)
-    t1 = "20241105T080000Z"
-    t2 = "20241108T235500Z"
+    t1 = "20241117T012000Z"
+    t2 = "20241117T082500Z"
     
     times, data_dict = get_past_data(locationId, coefs, t1, t2)
     
@@ -72,14 +73,36 @@ def initialise():
     axs[2].set_ylabel("pm10 (ppm)")
     fig.tight_layout()
     plt.show()
-
-
-
-    get_live_data(locationId, coefs)
-
     
 
+    
+    data_dict["timedelta"] = [(t-times[0]).seconds/3600 for t in times]
+    
+    # Fit the function a * np.exp(b * t) + c to x and y
+    def function1(t, a, b, c):
+        return a * np.exp(b * t) + c
+
+    
+    fig, axs = plt.subplots(nrows=2, sharex=True)
    
+    for ax, label, pretty in zip(axs, ["rco2", "tvoc"], ["CO2 (ppm)", "TVOC (ppm)"]):
+        popt, pcov = curve_fit(function1, data_dict["timedelta"], data_dict[label], p0=(1, -1e-5, 600))
+        print(popt, pcov)
+        ax.plot(data_dict["timedelta"], data_dict[label], label='Observed Data')
+        ax.plot(data_dict["timedelta"], function1(np.asarray(data_dict["timedelta"]), *popt), label='Fit: y = %5.0f * exp(%5.4f * x) + %5.0f' % tuple(popt))
+        ax.legend()
+        ax.set_ylabel(pretty)
+        ax.text(0.75, 0.75, rf"$\tau = {-1/popt[1]:.2f}$ hours", transform=ax.transAxes)
+
+    plt.suptitle("Exponential Decay of CO2 and TVOC in Poorly Ventilated Residential Kitchen") 
+    plt.legend()
+    plt.xlabel("Time (Hours)")
+    fig.tight_layout()
+    plt.show()
+
+
+    #get_live_data(locationId, coefs)
+
 
 
 
