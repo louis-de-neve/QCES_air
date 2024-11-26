@@ -16,6 +16,7 @@ class exponential_decay():
         self.start = start.astimezone(pytz.utc)
         self.stop = stop.astimezone(pytz.utc)
         self.window_open = window_open
+        self.window_state = "open" if window_open else "closed"
         self.duration = self.start - self.stop
         
         self.start_str = start.strftime("%Y%m%dT%H%M%SZ")
@@ -23,6 +24,10 @@ class exponential_decay():
 
         self.data_datetimes, self.data_dict = get_calibrated_past_data(locationId, coefs, self.start_str, self.stop_str)
         self.data_timedeltas = [(d - self.start).seconds/3600 for d in self.data_datetimes]
+
+        self.color="red"
+        if window_open:
+            self.color="blue"
 
         self.rescaled_data = {}
         self.coefs = {}
@@ -33,12 +38,15 @@ class exponential_decay():
     def rescale(self, rescale_index:int, species:str):
         popt, pcov = curve_fit(exponential_func, self.data_timedeltas, self.data_dict[species], p0=(500, -0.5, 400))
         self.coefs[species] = popt
+        self.tau = -1/popt[1]
         self.rescaled_data[species] = (self.data_dict[species] - popt[2]) / popt[0]
+
+    def get_individual_points(self, species):
+        return list(zip(self.data_timedeltas, self.rescaled_data[species]))
 
 # Fit the function a * np.exp(b * t) + c to x and y
 def exponential_func(t, a, b, c):
     return a * np.exp(b * t) + c
-
 def get_current_data_from_api(id:str):
     auth_token = "f2aec323-a779-4ee1-b63f-d147612982fb"
     auth_string = f"?token={auth_token}"
@@ -99,7 +107,6 @@ def exponentials_plots(locationId, coefs):
     plt.xlabel("Time (Hours)")
     fig.tight_layout()
     plt.show()
-
 def simple_plot(times, data_dict):
     fig, axs = plt.subplots(nrows=3, sharex=True)
     axs[0].plot(times, data_dict["rco2"])
@@ -110,48 +117,92 @@ def simple_plot(times, data_dict):
     axs[2].set_ylabel("pm10 (ppm)")
     fig.tight_layout()
     plt.show()
+def exponential_decay_plots(coefs):
+    
+    false_curves = []
+    false_curves.append(exponential_decay(datetime(2024, 11, 19, 5, 45), datetime(2024, 11, 19, 10, 55), False, coefs))
+    false_curves.append(exponential_decay(datetime(2024, 11, 20, 5, 45), datetime(2024, 11, 20, 9, 30), False, coefs))
+    false_curves.append(exponential_decay(datetime(2024, 11, 20, 16, 00), datetime(2024, 11, 20, 19, 15), False, coefs))
+    false_curves.append(exponential_decay(datetime(2024, 11, 21, 14, 00), datetime(2024, 11, 21, 17, 35), False, coefs))
+    false_curves.append(exponential_decay(datetime(2024, 11, 22, 13, 55), datetime(2024, 11, 22, 18, 40), False, coefs))
+    false_curves.append(exponential_decay(datetime(2024, 11, 23, 18, 5), datetime(2024, 11, 23, 20, 00), False, coefs))
+    true_curves = []
+    true_curves.append(exponential_decay(datetime(2024, 11, 22, 5, 40), datetime(2024, 11, 22, 9, 25), True, coefs))
+    true_curves.append(exponential_decay(datetime(2024, 11, 23, 6, 20), datetime(2024, 11, 23, 11, 30), True, coefs))
+    true_curves.append(exponential_decay(datetime(2024, 11, 24, 8, 25), datetime(2024, 11, 24, 12, 00), True, coefs))
+    curves = false_curves + true_curves
+    min_index = min([len(curve) for curve in curves]) - 1
+
+    def individual_lines():
+        fig, axs = plt.subplots(nrows=2, sharex=True)
+        for ax, label, pretty in zip(axs, ["rco2", "tvoc"], [rf"$CO_2$", "TVOC"]):
+            for curve in curves:
+                curve.rescale(min_index, label)
+                ax.plot(curve.data_timedeltas, curve.rescaled_data[label], color=curve.color, label=f"Window {curve.window_state}")
+            ax.set_ylabel(pretty)
+            handles, labels = ax.get_legend_handles_labels()
+            ax.legend(handles=[handles[0], handles[-1]], labels=[labels[0], labels[-1]], loc='upper right', frameon=False)
+        plt.xlim(-0.05, 5.2)
+        plt.suptitle("Normalised Exponential Decay of CO2 and TVOC in a Residential Bedroom")
+        axs[1].set_xlabel("Time since Source (Hours)")
+        fig.tight_layout()
+        plt.show()
+    #individual_lines()
+
+    def averaged_lines():
+        fig, axs = plt.subplots(nrows=2, sharex=True)
+        for ax, label, pretty in zip(axs, ["rco2", "tvoc"], [rf"$CO_2$", "TVOC"]):
+            for curve_list in [false_curves, true_curves]:
+                closed_points = []
+                taus = []
+                for curve in curve_list:
+                    curve.rescale(min_index, label)
+                    taus.append(curve.tau)
+                    closed_points += curve.get_individual_points(label)
+                times, points = zip(*closed_points)
+                #sns.lineplot(x=times, y=points, ax=ax, color=curve.color, label=rf"Window {curve.window_state}, $\tau = {np.mean(taus)*60:.1f} \pm {np.std(taus)*60:.1f} $ minutes")
+                ts = np.linspace(0, 5.2, 100)
+                ax.plot(ts,
+                         np.exp(-ts/np.mean(taus)),
+                        color=curve.color,
+                        label=rf"Window {curve.window_state}, $\tau = {np.mean(taus)*60:.1f} \pm {np.std(taus)*60:.1f} $ minutes")
+                ax.scatter(x=times,
+                            y=points,
+                            color=curve.color,
+                            alpha=0.2,
+                            linewidth=1,
+                            marker="x")
+                ax.fill_between(x=ts,
+                                 y1=np.exp(-ts/(np.mean(taus) + np.std(taus))),
+                                 y2=np.exp(-ts/(np.mean(taus) - np.std(taus))), 
+                                 color=curve.color,
+                                 alpha=0.2,
+                                 linewidth=0)
+            ax.set_ylabel(f"{pretty}")
+            ax.legend(frameon=False)
+        plt.xlim(-0.05, 5.2)
+        axs[1].set_xlabel("Time since Source (Hours)")
+        axs[0].set_title("CO2 and TVOC concentration above background\n relative to source concentration")
+        fig.tight_layout()
+        plt.show()
+    averaged_lines()
+
 def initialise():
+    
     locationId = "80176"    
     coefs = calibrate(locationId)
-
+    
     t1 = "20241119T000000Z"
     t2 = "20241126T093000Z"
     times, data_dict = get_calibrated_past_data(locationId, coefs, t1, t2)    
-
-    curves = []
-    curves.append(exponential_decay(datetime(2024, 11, 19, 5, 45), datetime(2024, 11, 19, 10, 55), False, coefs))
-    curves.append(exponential_decay(datetime(2024, 11, 20, 5, 45), datetime(2024, 11, 20, 9, 30), False, coefs))
-    curves.append(exponential_decay(datetime(2024, 11, 20, 16, 00), datetime(2024, 11, 20, 19, 15), False, coefs))
-    curves.append(exponential_decay(datetime(2024, 11, 21, 14, 00), datetime(2024, 11, 21, 17, 35), False, coefs))
-    curves.append(exponential_decay(datetime(2024, 11, 22, 13, 55), datetime(2024, 11, 22, 18, 40), False, coefs))
-    curves.append(exponential_decay(datetime(2024, 11, 23, 18, 5), datetime(2024, 11, 23, 20, 00), False, coefs))
-
-    curves.append(exponential_decay(datetime(2024, 11, 22, 5, 40), datetime(2024, 11, 22, 9, 25), True, coefs))
-    curves.append(exponential_decay(datetime(2024, 11, 23, 6, 20), datetime(2024, 11, 23, 11, 30), True, coefs))
-    curves.append(exponential_decay(datetime(2024, 11, 24, 8, 25), datetime(2024, 11, 24, 12, 00), True, coefs))
-    min_index = min([len(curve) for curve in curves]) - 1
-
-    fig, axs = plt.subplots(nrows=2, sharex=True)
-    for ax, label, pretty in zip(axs, ["rco2", "tvoc"], ["CO2 (ppm)", "TVOC (ppm)"]):
-        for curve in curves:
-            curve.rescale(min_index, label)
-            ax.plot(curve.data_timedeltas, curve.rescaled_data[label], label=f"Window Open: {curve.window_open}")
-        ax.set_ylabel(pretty)
-        ax.legend()
-   # for curve in curves:
-   #     curve.rescale(min_index, "rco2")
-   #     plt.plot(curve.data_timedeltas, curve.rescaled_data["rco2"], label=f"Window Open: {curve.window_open}")
-
-    plt.legend()
-    plt.show()
+    
+    #exponential_decay_plots(coefs)
 
     simple_plot(times, data_dict)
     
     #exponentials_plots(locationId, coefs)
     
     #get_live_data(locationId, coefs)
-
-
 
 
 if __name__ == "__main__":

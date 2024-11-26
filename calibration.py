@@ -111,7 +111,6 @@ def plot_data(times, jumped_concs, ref_concs):
 
 
 def lin_regress_against_reference(times, concs, ref_concs, no_plot=False):
-    fig = plt.figure()
     t0 = times[0]
     interval = [(t - t0).total_seconds()/3600 for t in times] 
     
@@ -129,7 +128,7 @@ def lin_regress_against_reference(times, concs, ref_concs, no_plot=False):
     print(sp.stats.linregress(concs[s1:s2], ref_concs[s1:s2]))
     
     sc = plt.scatter(concs[s1:s2], ref_concs[s1:s2], c=interval[s1:s2])
-
+    fig = plt.figure()
     def update(frame):
         sc.set_offsets(np.c_[concs[s1:s1+frame], ref_concs[s1:s1+frame]])
         return sc,
