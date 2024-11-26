@@ -10,6 +10,8 @@ from scipy.stats import linregress
 from datetime import datetime
 import seaborn as sns
 import pytz
+import pandas as pd
+
 
 class exponential_decay():
     def __init__(self, start:datetime, stop:datetime, window_open:bool, coefs, locationId:str=80176):
@@ -76,6 +78,9 @@ def get_calibrated_past_data(id:str, coefs, t1:str, t2:str):
     times = [parser.parse(d["timestamp"]) for d in response]
 
     data_dict["timedelta"] = [(t-times[0]).seconds/3600 for t in times]
+
+    data_dict["atmp"] = [t*1.327-6.738 if t < 10 else t*1.181 - 5.113 for t in data_dict["atmp"]]
+    data_dict["rhum"] = data_dict["rhum"] * 1.259 + 7.34
 
     return times, data_dict
 def get_live_data(id, coefs):
@@ -196,13 +201,22 @@ def initialise():
     t2 = "20241126T093000Z"
     times, data_dict = get_calibrated_past_data(locationId, coefs, t1, t2)    
     
+    df = pd.DataFrame(data_dict)
+    df2 = df[["pm01", "pm02", "pm10", "pm003Count", "rco2", "tvoc", "atmp", "rhum"]]
+
+    sns.heatmap(df2.corr(numeric_only=True), cmap="coolwarm", annot=True, vmin=-1, vmax=1)
+    plt.show()
+
+    plt.scatter(df["rco2"], df["tvoc"])
+    plt.show()
+
     #exponential_decay_plots(coefs)
 
-    simple_plot(times, data_dict)
-    
+    #simple_plot(times, data_dict)
+
     #exponentials_plots(locationId, coefs)
     
-    #get_live_data(locationId, coefs)
+    get_live_data(locationId, coefs)
 
 
 if __name__ == "__main__":
