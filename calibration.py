@@ -172,8 +172,8 @@ def main(id="80176"):
 
     plot_data(times, concs, ref_concs)
 
-    plt.plot(times, concs-ref_concs)
-    plt.show()
+   # plt.plot(times, concs-ref_concs)
+   # plt.show()
 
 if __name__ == "__main__":
     main()
