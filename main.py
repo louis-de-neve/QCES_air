@@ -27,9 +27,9 @@ class exponential_decay():
         self.data_datetimes, self.data_dict = get_calibrated_past_data(locationId, coefs, self.start_str, self.stop_str)
         self.data_timedeltas = [(d - self.start).seconds/3600 for d in self.data_datetimes]
 
-        self.color="red"
+        self.color="orangered"
         if window_open:
-            self.color="blue"
+            self.color="dodgerblue"
 
         self.rescaled_data = {}
         self.coefs = {}
@@ -37,11 +37,14 @@ class exponential_decay():
     def __len__(self):
         return len(self.data_timedeltas)
     
-    def rescale(self, rescale_index:int, species:str):
-        popt, pcov = curve_fit(exponential_func, self.data_timedeltas, self.data_dict[species], p0=(500, -0.5, 400))
+    def rescale(self, rescale_index:int, species:str, p0:list[float]=(500, -0.5, 400)):
+        popt, pcov = curve_fit(exponential_func, self.data_timedeltas, self.data_dict[species], p0=p0)
         self.coefs[species] = popt
         self.tau = -1/popt[1]
         self.rescaled_data[species] = (self.data_dict[species] - popt[2]) / popt[0]
+
+    def mean(self, species):
+        return np.mean(self.data_dict[species])
 
     def get_individual_points(self, species):
         return list(zip(self.data_timedeltas, self.rescaled_data[species]))
@@ -116,13 +119,13 @@ def simple_plot(times, data_dict):
     fig, axs = plt.subplots(nrows=3, sharex=True)
     axs[0].plot(times, data_dict["rco2"])
     axs[0].set_ylabel("Calibrated CO2 (ppm)")
-    axs[1].plot(times, data_dict["tvoc"])
-    axs[1].set_ylabel("tvoc (ppm)")
+    axs[1].plot(times, data_dict["atmp"])
+    axs[1].set_ylabel("temp)")
     axs[2].plot(times, data_dict["pm10"])
     axs[2].set_ylabel("pm10 (ppm)")
     fig.tight_layout()
     plt.show()
-def exponential_decay_plots(coefs):
+def exponential_decay_plots(coefs, get_curves=False):
     
     false_curves = []
     false_curves.append(exponential_decay(datetime(2024, 11, 19, 5, 45), datetime(2024, 11, 19, 10, 55), False, coefs))
@@ -131,12 +134,18 @@ def exponential_decay_plots(coefs):
     false_curves.append(exponential_decay(datetime(2024, 11, 21, 14, 00), datetime(2024, 11, 21, 17, 35), False, coefs))
     false_curves.append(exponential_decay(datetime(2024, 11, 22, 13, 55), datetime(2024, 11, 22, 18, 40), False, coefs))
     false_curves.append(exponential_decay(datetime(2024, 11, 23, 18, 5), datetime(2024, 11, 23, 20, 00), False, coefs))
+    false_curves.append(exponential_decay(datetime(2024, 11, 29, 5, 35), datetime(2024, 11, 29, 9, 20), False, coefs))
+    false_curves.append(exponential_decay(datetime(2024, 11, 30, 6, 30), datetime(2024, 11, 30, 11, 00), False, coefs))
     true_curves = []
     true_curves.append(exponential_decay(datetime(2024, 11, 22, 5, 40), datetime(2024, 11, 22, 9, 25), True, coefs))
     true_curves.append(exponential_decay(datetime(2024, 11, 23, 6, 20), datetime(2024, 11, 23, 11, 30), True, coefs))
     true_curves.append(exponential_decay(datetime(2024, 11, 24, 8, 25), datetime(2024, 11, 24, 12, 00), True, coefs))
+    true_curves.append(exponential_decay(datetime(2024, 11, 28, 12, 25), datetime(2024, 11, 28, 15, 40), True, coefs))  
     curves = false_curves + true_curves
     min_index = min([len(curve) for curve in curves]) - 1
+
+    if get_curves:
+        return curves
 
     def individual_lines():
         fig, axs = plt.subplots(nrows=2, sharex=True)
@@ -161,6 +170,7 @@ def exponential_decay_plots(coefs):
                 closed_points = []
                 taus = []
                 for curve in curve_list:
+                    #p0 = (500, -0.5, 400) if pretty == "pm3" else (50, -0.5, 40)
                     curve.rescale(min_index, label)
                     taus.append(curve.tau)
                     closed_points += curve.get_individual_points(label)
@@ -191,16 +201,7 @@ def exponential_decay_plots(coefs):
         fig.tight_layout()
         plt.show()
     averaged_lines()
-
-def initialise():
-    
-    locationId = "80176"    
-    coefs = calibrate(locationId)
-    
-    t1 = "20241119T000000Z"
-    t2 = "20241126T093000Z"
-    times, data_dict = get_calibrated_past_data(locationId, coefs, t1, t2)    
-    
+def correlation_plot(data_dict):
     df = pd.DataFrame(data_dict)
     df2 = df[["pm01", "pm02", "pm10", "pm003Count", "rco2", "tvoc", "atmp", "rhum"]]
 
@@ -210,13 +211,58 @@ def initialise():
     plt.scatter(df["rco2"], df["tvoc"])
     plt.show()
 
+def overall_plot(locationId, coefs):   
+    curves = exponential_decay_plots(coefs, get_curves=True)
+    start_time = (min([curve.start for curve in curves]) - timedelta(hours=2)).strftime("%Y%m%dT%H%M%SZ")
+    finish_time = (max([curve.stop for curve in curves]) + timedelta(hours=2)).strftime("%Y%m%dT%H%M%SZ")
+    data_dict = {}
+    mean_times = datetime.fromtimestamp(np.mean([curve.start.timestamp() for curve in curves]))
+    times1, data_dict1 = get_calibrated_past_data(locationId, coefs, start_time, mean_times.strftime("%Y%m%dT%H%M%SZ"))
+    times2, data_dict2 = get_calibrated_past_data(locationId, coefs, mean_times.strftime("%Y%m%dT%H%M%SZ"), finish_time)
+    times = times1 + times2
+    for data in data_dict1:
+        data_dict[data] = np.asarray(list(data_dict1[data]) + list(data_dict2[data]))
+
+    fig, axs = plt.subplots(nrows=2, sharex=True, figsize=(15, 6))
+    axs[0].plot(times, data_dict["rco2"])
+    axs[0].set_ylabel("Calibrated CO2 (ppm)")
+    axs[1].plot(times, data_dict["tvoc"])
+    axs[1].set_ylabel("tvoc (ppm)")
+
+    for curve in curves:
+        for ax in axs:
+            ax.fill_between([curve.start, curve.stop], 0, 2000, color=curve.color, alpha=0.2, label=f"Window {curve.window_state}")
+            
+    axs[0].set_xlim(min(times), max(times))
+    axs[0].set_ylim(450, 1300)
+    axs[1].set_ylim(0, 1400)
+    plt.xlabel("Date")
+    handles, labels = ax.get_legend_handles_labels()
+    axs[0].legend(handles=[handles[0], handles[-1]], labels=[labels[0], labels[-1]], loc='upper right', frameon=False)
+    fig.tight_layout()
+    plt.savefig("Outputs/overall_plot.png", dpi=600)
+    plt.show()
+
+def initialise():
+    
+    locationId = "80176"    
+    coefs = calibrate(locationId)
+    
+    #t1 = "20241120T000000Z"
+    #t2 = "20241130T093000Z"
+    #times, data_dict = get_calibrated_past_data(locationId, coefs, t1, t2)    
+    
+    overall_plot(locationId, coefs)
+
+    #correlation_plot(data_dict)
+
     #exponential_decay_plots(coefs)
 
     #simple_plot(times, data_dict)
 
     #exponentials_plots(locationId, coefs)
     
-    get_live_data(locationId, coefs)
+    #get_live_data(locationId, coefs)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from datetime import timedelta
 from matplotlib.animation import FuncAnimation
 import scipy as sp
 
+plt.rcParams["font.family"] = "DejaVu Serif"
 
 def get_data_from_api(id, t1, t2):
     auth_token = "f2aec323-a779-4ee1-b63f-d147612982fb"
@@ -99,14 +100,43 @@ def fix_gap(ref_times, ref_concs):
     return zip(*new_zipped)
 
 
-def plot_data(times, jumped_concs, ref_concs):
+def plot_data(times, jumped_concs, ref_concs, concs0):
 
-    plt.plot(times, jumped_concs, color="red", label="Sensor Data")
-    plt.plot(times, ref_concs, color="black", label="Reference")
+    fig, axs = plt.subplots(2, 1, figsize=(10, 6), sharex=True, height_ratios=[8, 5])
+
+    axs[0].plot(times, ref_concs, color="black", label="Reference Data", linewidth=1)
+    axs[1].plot(times, [0 for t in times], color="lightgrey", linewidth=1, linestyle="--")
+    axs[1].plot(times, jumped_concs-ref_concs, color="black", label="Error", linewidth=1)
+
+    axs[0].plot(times, jumped_concs, color="orangered", label="Calibrated Sensor Data", linewidth=1)
     
-    plt.xlabel("Date")
-    plt.ylabel("Concentration / ppm")
-    plt.legend()
+
+    
+
+    axs[1].set_xlabel("November 2024")
+    for ax in axs:
+        ax.fill_between([times[800], times[1200]], -100, 2000, color="darkgrey", alpha=0.2, label="Calibration Period")
+
+    axs[0].set_ylabel("CO₂ Concentration / ppm")
+    axs[1].set_ylabel("Error / ppm")
+
+    axs[0].legend(loc="upper left", frameon=False)
+
+    axs[0].set_ylim(415, 560)
+    axs[1].set_ylim(-20, 40)
+    axs[0].set_yticks([550, 525, 500, 475, 450, 425])
+    axs[1].set_yticks([40, 20, 0, -20])
+    mean_error = (np.sum(jumped_concs-ref_concs)/len(jumped_concs))
+    percent_error = (np.sum((jumped_concs-ref_concs)/ref_concs)/len(jumped_concs)*100)
+    print(mean_error, percent_error)
+    axs[1].text(times[20], 26, f"Mean Error: {mean_error:.2f} ppm\nMean % Error: {percent_error:.2f}%")
+    axs[1].set_xlim(times[0], datetime.datetime(2024, 10, 27, 18, 00))
+    axs[1].set_xticks([datetime.datetime(2024, 10, i, 0, 0) for i in range(23, 28)],
+                      ["23ʳᵈ", "24ᵗʰ", "25ᵗʰ", "26ᵗʰ", "27ᵗʰ"])
+
+    fig.tight_layout()
+
+    plt.savefig("final_outputs/7.png", dpi=1200)
     plt.show()
 
 
@@ -114,6 +144,7 @@ def lin_regress_against_reference(times, concs, ref_concs, no_plot=False):
     t0 = times[0]
     interval = [(t - t0).total_seconds()/3600 for t in times] 
     
+    print(len(concs))
     s1 = 800
     s2 = 1200
 
@@ -146,32 +177,18 @@ def lin_regress_against_reference(times, concs, ref_concs, no_plot=False):
     return times, concs2, ref_concs
 
 
-def calibrate(id="80176"):
-    times, concs = download_calibration_data(id)
+def main(id="80176"):
+    times, concs0 = download_calibration_data(id)
     ref_times, ref_concs = format_reference_data()
 
     ref_times, ref_concs = fix_gap(ref_times, ref_concs)
     
-    concs, jump_offsets = adjust_for_jumps(times, concs)
+    concs, jump_offsets = adjust_for_jumps(times, concs0)
+    
     times, concs, coef = lin_regress_against_reference(times, concs, ref_concs, no_plot=True)
 
-    return(coef)
+    plot_data(times, concs, ref_concs, concs0)
 
-
-def main(id="80176"):
-    times, concs = download_calibration_data(id)
-    ref_times, ref_concs = format_reference_data()
-
-    ref_times, ref_concs = fix_gap(ref_times, ref_concs)
-    
-    concs, jump_offsets = adjust_for_jumps(times, concs)
-    
-    times, concs, coef = lin_regress_against_reference(times, concs, ref_concs)
-
-    plot_data(times, concs, ref_concs)
-
-   # plt.plot(times, concs-ref_concs)
-   # plt.show()
 
 if __name__ == "__main__":
     main()

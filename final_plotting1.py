@@ -7,7 +7,7 @@ import datetime, pytz
 from datetime import timedelta
 from matplotlib.animation import FuncAnimation
 import scipy as sp
-
+plt.rcParams["font.family"] = "DejaVu Serif"
 
 def get_data_from_api(id, t1, t2):
     auth_token = "f2aec323-a779-4ee1-b63f-d147612982fb"
@@ -110,68 +110,56 @@ def plot_data(times, jumped_concs, ref_concs):
     plt.show()
 
 
-def lin_regress_against_reference(times, concs, ref_concs, no_plot=False):
+def lin_regress_against_reference(times, concs, ref_concs, ax, id, col):
     t0 = times[0]
     interval = [(t - t0).total_seconds()/3600 for t in times] 
     
-    s1 = 800
-    s2 = 1200
+    print(len(concs))
+    s1 = 560
+    s2 = 1380
 
     coef = np.polyfit(list(concs[s1:s2]), list(ref_concs[s1:s2]), 1)
 
     concs2 = np.asarray(concs) * coef[0] + coef[1]
 
-    if no_plot:
-        return (times, concs2, coef)
-
     print(sp.stats.linregress(concs[s1:s2], ref_concs[s1:s2]))
     
-    sc = plt.scatter(concs[s1:s2], ref_concs[s1:s2], c=interval[s1:s2])
-    fig = plt.figure()
-    def update(frame):
-        sc.set_offsets(np.c_[concs[s1:s1+frame], ref_concs[s1:s1+frame]])
-        return sc,
-    ani = FuncAnimation(fig, update, frames=len(concs[s1:s2]) + 1, blit=True, repeat=False, interval=0.002)
-
-    plt.legend()
-    cbar = plt.colorbar()
-    cbar.set_label("Time / hours")
-    plt.xlabel('Sensor Data / ppm')
-    plt.ylabel('Reference Data / ppm')
-    ani.save("LDN_Air_sensor.gif")
-    plt.show()
+    sc = ax.scatter(concs[s1:s2], ref_concs[s1:s2],
+                    c=col,
+                    alpha=0.5,
+                    marker="x",
+                    linewidth=1)
     
-    plot_data(times, concs2, ref_concs)
+    ax.plot(concs[s1:s2], concs2[s1:s2], color="black", linewidth=1)
+    r_value = sp.stats.linregress(concs[s1:s2], ref_concs[s1:s2]).rvalue
+    ax.text(0.65, 0.05, f"y = {coef[0]:.2f}x + {coef[1]:.2f}"+"\n"+f"R² = {r_value**2:.3f}",
+            transform=ax.transAxes,
+            fontname="DejaVu Serif")
+    ax.set_xlabel(r'Sensor CO₂ Data / ppm')
+    ax.set_ylim(430, 565)
+    ax.set_title(f"Sensor {id}")
 
-    return times, concs2, ref_concs
 
 
-def calibrate(id="80176"):
+def scatter_plot(ax, id="80176", col="red"):
     times, concs = download_calibration_data(id)
     ref_times, ref_concs = format_reference_data()
 
     ref_times, ref_concs = fix_gap(ref_times, ref_concs)
     
-    concs, jump_offsets = adjust_for_jumps(times, concs)
-    times, concs, coef = lin_regress_against_reference(times, concs, ref_concs, no_plot=True)
-
-    return(coef)
-
-
-def main(id="80176"):
-    times, concs = download_calibration_data(id)
-    ref_times, ref_concs = format_reference_data()
-
-    ref_times, ref_concs = fix_gap(ref_times, ref_concs)
+    #concs, jump_offsets = adjust_for_jumps(times, concs)
     
-    concs, jump_offsets = adjust_for_jumps(times, concs)
-    
-    times, concs, coef = lin_regress_against_reference(times, concs, ref_concs)
+    lin_regress_against_reference(times, concs, ref_concs, ax, id, col)
 
-    plot_data(times, concs, ref_concs)
 
-   # plt.plot(times, concs-ref_concs)
-   # plt.show()
+def main():
+    fig, axs = plt.subplots(1, 2, figsize=(10, 6), sharey=True)
+    for ax, id, col in zip(axs, ["80172", "80176"], ["orangered", "dodgerblue"]):
+        scatter_plot(ax, id, col)
+    axs[0].set_ylabel(r'Reference CO₂ Data / ppm')
+    fig.tight_layout()
+    plt.savefig("final_outputs/1.png", dpi=1200)
+    #plt.show()
 
 if __name__ == "__main__":
     main()
