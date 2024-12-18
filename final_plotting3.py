@@ -44,10 +44,14 @@ axs[3].spines['left'].set_visible(False)
 
 for curve in curves:
     for ax in axs:
+        if curve.window_state == "closed":
+            label = "Decay Type A"
+        else:
+            label = "Decay Type B"
         ax.fill_between([curve.start, curve.stop], 0, 2000,
                         color=curve.color,
                         alpha=0.17,
-                        label=f"Window {curve.window_state}",
+                        label=label,
                         linewidth=0)
         
 xticks = [datetime(2024, 11, i, 0, 0) for i in range(20, 31)]

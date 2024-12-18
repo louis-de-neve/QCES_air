@@ -119,8 +119,8 @@ def simple_plot(times, data_dict):
     fig, axs = plt.subplots(nrows=3, sharex=True)
     axs[0].plot(times, data_dict["rco2"])
     axs[0].set_ylabel("Calibrated CO2 (ppm)")
-    axs[1].plot(times, data_dict["atmp"])
-    axs[1].set_ylabel("temp)")
+    axs[1].plot(times, data_dict["tvoc"])
+    axs[1].set_ylabel("tvoc (ppm)")
     axs[2].plot(times, data_dict["pm10"])
     axs[2].set_ylabel("pm10 (ppm)")
     fig.tight_layout()
@@ -248,17 +248,17 @@ def initialise():
     locationId = "80176"    
     coefs = calibrate(locationId)
     
-    #t1 = "20241120T000000Z"
-    #t2 = "20241130T093000Z"
-    #times, data_dict = get_calibrated_past_data(locationId, coefs, t1, t2)    
+    t1 = "20241127T000000Z"
+    t2 = "20241202T093000Z"
+    times, data_dict = get_calibrated_past_data(locationId, coefs, t1, t2)    
     
-    overall_plot(locationId, coefs)
+    #overall_plot(locationId, coefs)
 
     #correlation_plot(data_dict)
 
     #exponential_decay_plots(coefs)
 
-    #simple_plot(times, data_dict)
+    simple_plot(times, data_dict)
 
     #exponentials_plots(locationId, coefs)
     

@@ -27,6 +27,8 @@ for i in list(range(20, 25))+list(range(28, 31)):
 
 mean_co2s = [night.mean("rco2") for night in nights]
 mean_nightly_co2 = np.mean(mean_co2s) # ppm
+stdev_nightly_co2 = np.std(mean_co2s) # ppm
+print(stdev_nightly_co2, "ppm")
 
 plt.plot(night.data_timedeltas, np.full_like(night.data_timedeltas, mean_nightly_co2),
          color="black", linestyle="--", linewidth=1)
@@ -44,14 +46,16 @@ plt.plot(night.data_timedeltas, np.full_like(night.data_timedeltas, mean_backgro
 
 c_prime = mean_nightly_co2 - mean_background_co2 # ppm
 ppm_flux = c_prime / tau # ppm/s
+print(ppm_flux, "ppm/s")
 mg_flux = 0.0409 * ppm_flux * molecular_weight # mg s-1 m-3
 gh_flux = mg_flux * 3.6 # g hr-1 m-3
+print(gh_flux)
 lh_flux = gh_flux / density # L hr-1 m-3
 
 flux = lh_flux * room_volume # L hr-1
 print(flux)
 handles, labels = ax.get_legend_handles_labels()
-print(handles, labels)
+
 plt.legend(handles[-2:], [f"Interior (8 nights)"+"\n"+f"Mean: {mean_nightly_co2:.0f} ppm",
                           f"Exterior (26th Nov)"+"\n"+f"Mean: {mean_background_co2:.0f} ppm"],
            frameon=False,
@@ -63,7 +67,7 @@ plt.xlabel("Time / hours")
 plt.ylabel("CO₂ Concentration / ppm")
 fig.tight_layout()
 plt.savefig("final_outputs/6.png", dpi=1200)
-plt.show()
+
 
 
 
